@@ -1,6 +1,9 @@
-use rand::Rng;
-use std::thread;
 use std::time::Duration;
+
+use nix::sys::time::TimeSpec;
+use nix::sys::timerfd::{ClockId, Expiration, TimerFd, TimerFlags, TimerSetTimeFlags};
+
+use rand::Rng;
 
 use crate::config::Config;
 use crate::email::EmailSender;
@@ -69,6 +72,15 @@ pub fn run(config: Config, notifiers: Vec<Box<dyn Notifier>>) {
         let total = (config.check_interval_minutes + delay_min) * 60;
 
         println!("[runner] sleeping for {}m {}s", total / 60, total % 60);
-        thread::sleep(Duration::from_secs(total));
+
+        let timer = TimerFd::new(ClockId::CLOCK_BOOTTIME, TimerFlags::empty())
+            .expect("timerfd_create failed");
+        timer
+            .set(
+                Expiration::OneShot(TimeSpec::from_duration(Duration::from_secs(total))),
+                TimerSetTimeFlags::empty(),
+            )
+            .expect("timerfd_settime failed");
+        timer.wait().expect("timerfd wait failed");
     }
 }
