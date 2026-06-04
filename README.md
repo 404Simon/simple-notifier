@@ -1,36 +1,43 @@
 # simple-notifier
 
-Simple notifier that monitors sources for updates and sends email notifications.
+Monitors sources for updates and sends email notifications.
 
-Currently supports:
-- **ScriptHookV** — checks [dev-c.com/gtav/scripthookv](http://www.dev-c.com/gtav/scripthookv/) for new versions
+**Notifiers:**
+- **ScriptHookV** - checks [dev-c.com](http://www.dev-c.com/gtav/scripthookv/) for new versions
+- **GitHub** - monitors repos for commits, PRs, and releases
 
-## Configuration
+## Config
 
-Create a `.env` file or set environment variables:
+Edit `~/.config/simple-notifier.yml`:
 
+```yaml
+state_file: ~/.local/state/simple-notifier/state
+check_interval_minutes: 60
+random_delay_min_minutes: 5
+random_delay_max_minutes: 15
+send_test_mail_on_startup: false
+
+email:
+  smtp_host: smtp.gmail.com
+  smtp_port: 587
+  smtp_username: me
+  smtp_password: secret
+  from: me@gmail.com
+  to: you@example.com
+
+repos:
+  - owner: simon
+    repo: my-project
+    watch:
+      commits: true
+      prs: true
+      releases: false
+    branches: default
 ```
-SMTP_HOST=localhost
-SMTP_PORT=587
-SMTP_USERNAME=
-SMTP_PASSWORD=
-FROM_EMAIL=
-TO_EMAIL=
-STATE_FILE=./state
-CHECK_INTERVAL_MINUTES=60
-RANDOM_DELAY_MIN_MINUTES=5
-RANDOM_DELAY_MAX_MINUTES=15
-SEND_TEST_MAIL_ON_STARTUP=false
-```
 
-## Build
+## Build & Run
 
 ```sh
 cargo build --release
-```
-
-## Run
-
-```sh
 ./target/release/simple-notifier
 ```
