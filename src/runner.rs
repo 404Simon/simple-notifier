@@ -3,7 +3,7 @@ use std::time::Duration;
 use nix::sys::time::TimeSpec;
 use nix::sys::timerfd::{ClockId, Expiration, TimerFd, TimerFlags, TimerSetTimeFlags};
 
-use rand::Rng;
+use rand::RngExt;
 
 use crate::config::Config;
 use crate::email::EmailSender;
@@ -45,7 +45,7 @@ pub fn run(config: Config, notifiers: Vec<Box<dyn Notifier>>) {
         }
     }
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     loop {
         let mut storage = Storage::load(&config.state_file);
@@ -68,7 +68,7 @@ pub fn run(config: Config, notifiers: Vec<Box<dyn Notifier>>) {
         storage.save();
 
         let delay_min = config.random_delay_min_minutes
-            + rng.gen_range(0..=config.random_delay_max_minutes - config.random_delay_min_minutes);
+            + rng.random_range(0..=config.random_delay_max_minutes - config.random_delay_min_minutes);
         let total = (config.check_interval_minutes + delay_min) * 60;
 
         println!("[runner] sleeping for {}m {}s", total / 60, total % 60);
