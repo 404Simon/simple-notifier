@@ -1,86 +1,126 @@
-use std::env;
+use serde::Deserialize;
 use std::fs;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
 
+fn default_state_file() -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    format!("{home}/.local/state/simple-notifier/state")
+}
+
+fn default_check_interval() -> u64 {
+    60
+}
+fn default_random_delay_min() -> u64 {
+    5
+}
+fn default_random_delay_max() -> u64 {
+    15
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
+    #[serde(default = "default_state_file")]
+    pub state_file: String,
+    #[serde(default = "default_check_interval")]
+    pub check_interval_minutes: u64,
+    #[serde(default = "default_random_delay_min")]
+    pub random_delay_min_minutes: u64,
+    #[serde(default = "default_random_delay_max")]
+    pub random_delay_max_minutes: u64,
+    #[serde(default)]
+    pub send_test_mail_on_startup: bool,
+    pub email: EmailConfig,
+    #[serde(default)]
+    pub repos: Vec<RepoConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EmailConfig {
     pub smtp_host: String,
     pub smtp_port: u16,
     pub smtp_username: String,
     pub smtp_password: String,
-    pub from_email: String,
-    pub to_email: String,
-    pub state_file: String,
-    pub check_interval_secs: u64,
-    pub random_delay_min_secs: u64,
-    pub random_delay_max_secs: u64,
-    pub send_test_mail_on_startup: bool,
+    pub from: String,
+    pub to: String,
 }
 
-fn env_or(key: &str, default: &str) -> String {
-    env::var(key).unwrap_or_else(|_| default.to_string())
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct WatchConfig {
+    #[serde(default)]
+    pub commits: bool,
+    #[serde(default)]
+    pub prs: bool,
+    #[serde(default)]
+    pub releases: bool,
 }
 
-fn env_bool(key: &str) -> bool {
-    env::var(key)
-        .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false)
+#[derive(Debug, Clone)]
+pub enum BranchesConfig {
+    Default,
+    All,
+    List(Vec<String>),
 }
 
-fn env_parse_or<T: std::str::FromStr>(key: &str, default: T) -> T {
-    env::var(key)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default)
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum BranchesField {
+    Keyword(String),
+    List(Vec<String>),
 }
 
-impl Config {
-    pub fn from_env() -> Self {
-        load_dotenv();
+#[derive(Debug, Clone, Deserialize)]
+pub struct RepoConfig {
+    pub owner: String,
+    pub repo: String,
+    #[serde(default)]
+    pub watch: WatchConfig,
+    #[serde(
+        default = "default_branches",
+        deserialize_with = "deserialize_branches"
+    )]
+    pub branches: BranchesConfig,
+}
 
-        Self {
-            smtp_host: env_or("SMTP_HOST", "localhost"),
-            smtp_port: env_parse_or("SMTP_PORT", 587u16),
-            smtp_username: env_or("SMTP_USERNAME", ""),
-            smtp_password: env_or("SMTP_PASSWORD", ""),
-            from_email: env_or("FROM_EMAIL", ""),
-            to_email: env_or("TO_EMAIL", ""),
-            state_file: env_or(
-                "STATE_FILE",
-                "/var/lib/simple-notifier/state",
-            ),
-            check_interval_secs: env_parse_or("CHECK_INTERVAL_MINUTES", 60u64) * 60,
-            random_delay_min_secs: env_parse_or("RANDOM_DELAY_MIN_MINUTES", 5u64) * 60,
-            random_delay_max_secs: env_parse_or("RANDOM_DELAY_MAX_MINUTES", 15u64) * 60,
-            send_test_mail_on_startup: env_bool("SEND_TEST_MAIL_ON_STARTUP"),
-        }
+fn default_branches() -> BranchesConfig {
+    BranchesConfig::Default
+}
+
+fn deserialize_branches<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<BranchesConfig, D::Error> {
+    let field = BranchesField::deserialize(d)?;
+    match field {
+        BranchesField::Keyword(s) => match s.as_str() {
+            "default" => Ok(BranchesConfig::Default),
+            "all" => Ok(BranchesConfig::All),
+            other => Err(serde::de::Error::unknown_variant(
+                other,
+                &["default", "all"],
+            )),
+        },
+        BranchesField::List(list) => Ok(BranchesConfig::List(list)),
     }
 }
 
-fn load_dotenv() {
-    let path = env::var("DOTENV_PATH").unwrap_or_else(|_| ".env".to_string());
-    let file = match fs::File::open(Path::new(&path)) {
-        Ok(f) => f,
-        Err(_) => return,
-    };
+impl Config {
+    pub fn from_file() -> Result<Self, String> {
+        let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+        let xdg_config =
+            std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
+        let path = format!("{xdg_config}/simple-notifier.yml");
 
-    for line in BufReader::new(file).lines().map_while(Result::ok) {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let (key, val) = match trimmed.split_once('=') {
-            Some((k, v)) => (k.trim(), v.trim()),
-            None => continue,
-        };
-        let val = val
-            .strip_prefix('"')
-            .and_then(|s| s.strip_suffix('"'))
-            .or_else(|| val.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
-            .unwrap_or(val);
+        let contents = fs::read_to_string(&path)
+            .map_err(|e| format!("failed to read config at {path}: {e}"))?;
 
-        if env::var(key).is_err() {
-            unsafe { env::set_var(key, val) };
+        let config: Config = serde_yaml::from_str(&contents)
+            .map_err(|e| format!("failed to parse config YAML: {e}"))?;
+
+        Ok(config.expand_tilde(&home))
+    }
+
+    fn expand_tilde(mut self, home: &str) -> Self {
+        if self.state_file.starts_with("~/") {
+            self.state_file = format!("{home}/{}", &self.state_file[2..]);
         }
+        self
     }
 }

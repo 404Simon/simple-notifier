@@ -20,10 +20,15 @@ fn parse_mailbox(raw: &str, label: &str) -> Result<Mailbox, String> {
         Address::new(user, domain).map_err(|e| format!("invalid {label} address: {e}"))
     };
 
-    if let Some((name, addr)) = raw.split_once('<').and_then(|(n, a)| {
-        a.strip_suffix('>').map(|a| (n.trim(), a.trim()))
-    }) {
-        let name = if name.is_empty() { None } else { Some(name.to_string()) };
+    if let Some((name, addr)) = raw
+        .split_once('<')
+        .and_then(|(n, a)| a.strip_suffix('>').map(|a| (n.trim(), a.trim())))
+    {
+        let name = if name.is_empty() {
+            None
+        } else {
+            Some(name.to_string())
+        };
         let addr = parse_addr(addr)?;
         Ok(Mailbox::new(name, addr))
     } else {

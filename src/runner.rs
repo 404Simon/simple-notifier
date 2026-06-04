@@ -10,12 +10,12 @@ use crate::storage::Storage;
 
 pub fn run(config: Config, notifiers: Vec<Box<dyn Notifier>>) {
     let email = EmailSender::new(
-        &config.from_email,
-        &config.to_email,
-        &config.smtp_host,
-        config.smtp_port,
-        &config.smtp_username,
-        &config.smtp_password,
+        &config.email.from,
+        &config.email.to,
+        &config.email.smtp_host,
+        config.email.smtp_port,
+        &config.email.smtp_username,
+        &config.email.smtp_password,
     );
 
     let email = match email {
@@ -64,15 +64,11 @@ pub fn run(config: Config, notifiers: Vec<Box<dyn Notifier>>) {
 
         storage.save();
 
-        let delay = config.random_delay_min_secs
-            + rng.gen_range(0..=config.random_delay_max_secs - config.random_delay_min_secs);
-        let total = config.check_interval_secs + delay;
+        let delay_min = config.random_delay_min_minutes
+            + rng.gen_range(0..=config.random_delay_max_minutes - config.random_delay_min_minutes);
+        let total = (config.check_interval_minutes + delay_min) * 60;
 
-        println!(
-            "[runner] sleeping for {}m {}s",
-            total / 60,
-            total % 60
-        );
+        println!("[runner] sleeping for {}m {}s", total / 60, total % 60);
         thread::sleep(Duration::from_secs(total));
     }
 }

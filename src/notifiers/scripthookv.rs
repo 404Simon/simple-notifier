@@ -47,9 +47,7 @@ impl Notifier for ScriptHookV {
             ),
             None => (
                 format!("ScriptHookV {version} detected"),
-                format!(
-                    "Initial ScriptHookV version detected: {version}\n\n{URL}"
-                ),
+                format!("Initial ScriptHookV version detected: {version}\n\n{URL}"),
             ),
         };
 
@@ -74,7 +72,8 @@ fn fetch_page() -> Result<String, String> {
 fn extract_version(html: &str) -> Option<String> {
     let re = Regex::new(r"v?(\d+\.\d+\.\d+(?:\.\d+)?)").ok()?;
 
-    let downloads_section = html.find("downloadsSection")
+    let downloads_section = html
+        .find("downloadsSection")
         .or_else(|| html.find("download"))
         .unwrap_or(0);
 
