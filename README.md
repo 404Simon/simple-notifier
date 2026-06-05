@@ -5,6 +5,7 @@ Monitors sources for updates and sends email notifications.
 **Notifiers:**
 - **ScriptHookV** - checks [dev-c.com](http://www.dev-c.com/gtav/scripthookv/) for new versions
 - **GitHub** - monitors repos for commits, PRs, and releases
+- **Weather** - checks Open-Meteo 3-day forecast for temperature thresholds and extreme weather (storms, heavy rain/snow, strong wind)
 
 ## Config
 
@@ -33,6 +34,13 @@ repos:
       prs: true
       releases: false
     branches: default
+
+weather:
+  latitude: 48.8566
+  longitude: 2.3522
+  min_night_temp: 5        # alert if night low below this °C (optional)
+  max_day_temp: 35         # alert if day high above this °C (optional)
+  extreme_weather: true    # alert on storms, heavy rain/snow, strong wind (optional)
 ```
 
 ## Build & Run

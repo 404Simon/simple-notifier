@@ -31,6 +31,26 @@ pub struct Config {
     pub email: EmailConfig,
     #[serde(default)]
     pub repos: Vec<RepoConfig>,
+    #[serde(default)]
+    pub weather: Option<WeatherConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WeatherConfig {
+    pub latitude: f64,
+    pub longitude: f64,
+    #[serde(default)]
+    pub min_night_temp: Option<f64>,
+    #[serde(default)]
+    pub max_day_temp: Option<f64>,
+    #[serde(default)]
+    pub extreme_weather: bool,
+}
+
+impl WeatherConfig {
+    pub fn has_checks(&self) -> bool {
+        self.min_night_temp.is_some() || self.max_day_temp.is_some() || self.extreme_weather
+    }
 }
 
 #[derive(Debug, Deserialize)]

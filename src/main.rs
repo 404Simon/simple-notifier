@@ -8,6 +8,7 @@ mod storage;
 use config::Config;
 use notifiers::github::GitHub;
 use notifiers::scripthookv::ScriptHookV;
+use notifiers::weather::Weather;
 
 fn main() {
     let config = Config::from_file().unwrap_or_else(|e| {
@@ -19,6 +20,12 @@ fn main() {
 
     if !config.repos.is_empty() {
         notifiers.push(Box::new(GitHub::new(config.repos.clone())));
+    }
+
+    if let Some(ref weather_config) = config.weather
+        && weather_config.has_checks()
+    {
+        notifiers.push(Box::new(Weather::new(weather_config.clone())));
     }
 
     runner::run(config, notifiers);

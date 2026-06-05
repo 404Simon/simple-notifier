@@ -68,7 +68,9 @@ pub fn run(config: Config, notifiers: Vec<Box<dyn Notifier>>) {
         storage.save();
 
         let delay_min = config.random_delay_min_minutes
-            + rng.random_range(0..=config.random_delay_max_minutes - config.random_delay_min_minutes);
+            + rng.random_range(
+                0..=config.random_delay_max_minutes - config.random_delay_min_minutes,
+            );
         let total = (config.check_interval_minutes + delay_min) * 60;
 
         println!("[runner] sleeping for {}m {}s", total / 60, total % 60);
