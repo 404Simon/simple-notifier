@@ -1,4 +1,5 @@
-use lettre::message::Mailbox;
+use lettre::message::header::{ContentTransferEncoding, ContentType};
+use lettre::message::{Body, Mailbox, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Address, Message, SmtpTransport, Transport};
 
@@ -59,11 +60,20 @@ impl EmailSender {
     }
 
     pub fn send(&self, notification: &Notification) -> Result<(), String> {
+        let body =
+            Body::new_with_encoding(notification.body.clone(), ContentTransferEncoding::EightBit)
+                .map_err(|_| "failed to encode email body".to_string())?;
+
         let email = Message::builder()
             .from(self.from.clone())
             .to(self.to.clone())
             .subject(&notification.title)
-            .body(notification.body.clone())
+            .singlepart(
+                SinglePart::builder()
+                    .header(ContentType::TEXT_PLAIN)
+                    .header(ContentTransferEncoding::EightBit)
+                    .body(body),
+            )
             .map_err(|e| format!("failed to build email: {e}"))?;
 
         let mailer = SmtpTransport::relay(&self.smtp_host)
