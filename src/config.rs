@@ -28,6 +28,8 @@ pub struct Config {
     pub random_delay_max_minutes: u64,
     #[serde(default)]
     pub send_test_mail_on_startup: bool,
+    #[serde(default)]
+    pub github_token: Option<String>,
     pub email: EmailConfig,
     #[serde(default)]
     pub repos: Vec<RepoConfig>,

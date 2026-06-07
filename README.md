@@ -18,6 +18,12 @@ random_delay_min_minutes: 5
 random_delay_max_minutes: 15
 send_test_mail_on_startup: false
 
+# Optional GitHub personal access token.
+# No scopes needed for public repos (5000 req/hr instead of 60).
+# Add `repo` scope to monitor private repos.
+# Generate at: https://github.com/settings/tokens (classic)
+# github_token: ghp_abc123def456
+
 email:
   smtp_host: smtp.gmail.com
   smtp_port: 587

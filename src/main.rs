@@ -19,7 +19,10 @@ fn main() {
     let mut notifiers: Vec<Box<dyn notifier::Notifier>> = vec![Box::new(ScriptHookV)];
 
     if !config.repos.is_empty() {
-        notifiers.push(Box::new(GitHub::new(config.repos.clone())));
+        notifiers.push(Box::new(GitHub::new(
+            config.repos.clone(),
+            config.github_token.clone(),
+        )));
     }
 
     if let Some(ref weather_config) = config.weather

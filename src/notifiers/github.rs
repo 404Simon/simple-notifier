@@ -8,11 +8,12 @@ use crate::storage::Storage;
 
 pub struct GitHub {
     repos: Vec<RepoConfig>,
+    token: Option<String>,
 }
 
 impl GitHub {
-    pub fn new(repos: Vec<RepoConfig>) -> Self {
-        Self { repos }
+    pub fn new(repos: Vec<RepoConfig>, token: Option<String>) -> Self {
+        Self { repos, token }
     }
 }
 
@@ -26,17 +27,17 @@ impl Notifier for GitHub {
 
         for repo in &self.repos {
             if repo.watch.commits
-                && let Some(entry) = check_commits(repo, storage)
+                && let Some(entry) = check_commits(repo, storage, self.token.as_deref())
             {
                 entries.push(entry);
             }
             if repo.watch.prs
-                && let Some(entry) = check_prs(repo, storage)
+                && let Some(entry) = check_prs(repo, storage, self.token.as_deref())
             {
                 entries.push(entry);
             }
             if repo.watch.releases
-                && let Some(entry) = check_releases(repo, storage)
+                && let Some(entry) = check_releases(repo, storage, self.token.as_deref())
             {
                 entries.push(entry);
             }
@@ -59,10 +60,13 @@ impl Notifier for GitHub {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-fn api_get(path: &str) -> Result<serde_json::Value, String> {
+fn api_get(path: &str, token: Option<&str>) -> Result<serde_json::Value, String> {
     let url = format!("https://api.github.com{path}");
-    let resp = ureq::get(&url)
-        .header("User-Agent", "simple-notifier/0.1")
+    let mut req = ureq::get(&url).header("User-Agent", "simple-notifier/0.1");
+    if let Some(t) = token {
+        req = req.header("Authorization", &format!("Bearer {t}"));
+    }
+    let resp = req
         .call()
         .map_err(|e| format!("HTTP error fetching {url}: {e}"))?;
 
@@ -74,31 +78,31 @@ fn api_get(path: &str) -> Result<serde_json::Value, String> {
     serde_json::from_str(&body).map_err(|e| format!("JSON parse error: {e}"))
 }
 
-fn resolve_branches(repo: &RepoConfig, storage: &mut Storage) -> Vec<String> {
+fn resolve_branches(repo: &RepoConfig, storage: &mut Storage, token: Option<&str>) -> Vec<String> {
     match &repo.branches {
         BranchesConfig::Default => {
             let cache_key = format!("github_default_branch_{}_{}", repo.owner, repo.repo);
             if let Some(cached) = storage.get(&cache_key) {
                 return vec![cached.to_string()];
             }
-            let branch = fetch_default_branch(repo).unwrap_or_else(|| "main".to_string());
+            let branch = fetch_default_branch(repo, token).unwrap_or_else(|| "main".to_string());
             storage.set(&cache_key, &branch);
             vec![branch]
         }
-        BranchesConfig::All => fetch_all_branches(repo).unwrap_or_default(),
+        BranchesConfig::All => fetch_all_branches(repo, token).unwrap_or_default(),
         BranchesConfig::List(list) => list.clone(),
     }
 }
 
-fn fetch_default_branch(repo: &RepoConfig) -> Option<String> {
+fn fetch_default_branch(repo: &RepoConfig, token: Option<&str>) -> Option<String> {
     let path = format!("/repos/{}/{}", repo.owner, repo.repo);
-    let json = api_get(&path).ok()?;
+    let json = api_get(&path, token).ok()?;
     json.get("default_branch")?.as_str().map(|s| s.to_string())
 }
 
-fn fetch_all_branches(repo: &RepoConfig) -> Option<Vec<String>> {
+fn fetch_all_branches(repo: &RepoConfig, token: Option<&str>) -> Option<Vec<String>> {
     let path = format!("/repos/{}/{}/branches?per_page=100", repo.owner, repo.repo);
-    let json = api_get(&path).ok()?;
+    let json = api_get(&path, token).ok()?;
     let arr = json.as_array()?;
     Some(
         arr.iter()
@@ -127,15 +131,15 @@ struct CommitAuthor {
     name: String,
 }
 
-fn check_commits(repo: &RepoConfig, storage: &mut Storage) -> Option<String> {
-    let branches = resolve_branches(repo, storage);
+fn check_commits(repo: &RepoConfig, storage: &mut Storage, token: Option<&str>) -> Option<String> {
+    let branches = resolve_branches(repo, storage, token);
     let mut branch_entries: Vec<String> = Vec::new();
 
     for branch in &branches {
         let key = format!("github_commits_{}_{}_{}", repo.owner, repo.repo, branch);
         let stored_sha = storage.get(&key).map(|s| s.to_string());
 
-        let latest = fetch_latest_commit_sha(repo, branch)?;
+        let latest = fetch_latest_commit_sha(repo, branch, token)?;
 
         if stored_sha.as_deref() == Some(&latest) {
             continue;
@@ -143,7 +147,7 @@ fn check_commits(repo: &RepoConfig, storage: &mut Storage) -> Option<String> {
 
         let commits = match stored_sha {
             Some(ref old) if old != &latest => {
-                fetch_commits_between(repo, old, &latest, branch).unwrap_or_default()
+                fetch_commits_between(repo, old, &latest, branch, token).unwrap_or_default()
             }
             _ => vec![], // first time seeing this branch — record SHA, no notification
         };
@@ -184,12 +188,12 @@ fn check_commits(repo: &RepoConfig, storage: &mut Storage) -> Option<String> {
     ))
 }
 
-fn fetch_latest_commit_sha(repo: &RepoConfig, branch: &str) -> Option<String> {
+fn fetch_latest_commit_sha(repo: &RepoConfig, branch: &str, token: Option<&str>) -> Option<String> {
     let path = format!(
         "/repos/{}/{}/commits?sha={}&per_page=1",
         repo.owner, repo.repo, branch
     );
-    let json = api_get(&path).ok()?;
+    let json = api_get(&path, token).ok()?;
     let arr = json.as_array()?;
     let first = arr.first()?;
     first.get("sha")?.as_str().map(|s| s.to_string())
@@ -200,15 +204,16 @@ fn fetch_commits_between(
     base: &str,
     head: &str,
     branch: &str,
+    token: Option<&str>,
 ) -> Option<Vec<CommitDetail>> {
     let path = format!(
         "/repos/{}/{}/compare/{}...{}",
         repo.owner, repo.repo, base, head
     );
-    let json = api_get(&path).ok()?;
+    let json = api_get(&path, token).ok()?;
     // If compare fails (e.g. force-push), fall back to listing commits on the branch
     if json.get("commits").is_none() {
-        return fetch_recent_commits(repo, branch, 30);
+        return fetch_recent_commits(repo, branch, token, 30);
     }
     serde_json::from_value(json["commits"].clone()).ok()
 }
@@ -216,13 +221,14 @@ fn fetch_commits_between(
 fn fetch_recent_commits(
     repo: &RepoConfig,
     branch: &str,
+    token: Option<&str>,
     count: usize,
 ) -> Option<Vec<CommitDetail>> {
     let path = format!(
         "/repos/{}/{}/commits?sha={}&per_page={}",
         repo.owner, repo.repo, branch, count
     );
-    let json = api_get(&path).ok()?;
+    let json = api_get(&path, token).ok()?;
     serde_json::from_value(json).ok()
 }
 
@@ -240,11 +246,11 @@ struct PRUser {
     login: String,
 }
 
-fn check_prs(repo: &RepoConfig, storage: &mut Storage) -> Option<String> {
+fn check_prs(repo: &RepoConfig, storage: &mut Storage, token: Option<&str>) -> Option<String> {
     let key = format!("github_prs_max_{}_{}", repo.owner, repo.repo);
     let stored_max: Option<i64> = storage.get(&key).and_then(|s| s.parse::<i64>().ok());
 
-    let prs = fetch_open_prs(repo)?;
+    let prs = fetch_open_prs(repo, token)?;
 
     let current_max = prs.iter().map(|p| p.number).max();
 
@@ -282,12 +288,12 @@ fn check_prs(repo: &RepoConfig, storage: &mut Storage) -> Option<String> {
     ))
 }
 
-fn fetch_open_prs(repo: &RepoConfig) -> Option<Vec<PRInfo>> {
+fn fetch_open_prs(repo: &RepoConfig, token: Option<&str>) -> Option<Vec<PRInfo>> {
     let path = format!(
         "/repos/{}/{}/pulls?state=open&per_page=100&sort=created&direction=desc",
         repo.owner, repo.repo
     );
-    let json = api_get(&path).ok()?;
+    let json = api_get(&path, token).ok()?;
     serde_json::from_value(json).ok()
 }
 
@@ -299,7 +305,7 @@ struct ReleaseInfo {
     name: String,
 }
 
-fn check_releases(repo: &RepoConfig, storage: &mut Storage) -> Option<String> {
+fn check_releases(repo: &RepoConfig, storage: &mut Storage, token: Option<&str>) -> Option<String> {
     let key = format!("github_releases_seen_{}_{}", repo.owner, repo.repo);
     let seen: HashSet<String> = storage
         .get(&key)
@@ -311,7 +317,7 @@ fn check_releases(repo: &RepoConfig, storage: &mut Storage) -> Option<String> {
         })
         .unwrap_or_default();
 
-    let releases = fetch_releases(repo)?;
+    let releases = fetch_releases(repo, token)?;
 
     let new_releases: Vec<&ReleaseInfo> = releases
         .iter()
@@ -356,11 +362,11 @@ fn check_releases(repo: &RepoConfig, storage: &mut Storage) -> Option<String> {
     ))
 }
 
-fn fetch_releases(repo: &RepoConfig) -> Option<Vec<ReleaseInfo>> {
+fn fetch_releases(repo: &RepoConfig, token: Option<&str>) -> Option<Vec<ReleaseInfo>> {
     let path = format!(
         "/repos/{}/{}/releases?per_page=10&sort=created&direction=desc",
         repo.owner, repo.repo
     );
-    let json = api_get(&path).ok()?;
+    let json = api_get(&path, token).ok()?;
     serde_json::from_value(json).ok()
 }
