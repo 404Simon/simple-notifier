@@ -95,6 +95,8 @@ pub struct RepoConfig {
     pub repo: String,
     #[serde(default)]
     pub watch: WatchConfig,
+    #[serde(default)]
+    pub ignore_authors: Vec<String>,
     #[serde(
         default = "default_branches",
         deserialize_with = "deserialize_branches"

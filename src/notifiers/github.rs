@@ -117,18 +117,25 @@ fn fetch_all_branches(repo: &RepoConfig, token: Option<&str>) -> Option<Vec<Stri
 struct CommitDetail {
     sha: String,
     commit: CommitContent,
+    #[serde(default)]
+    author: Option<CommitAuthor>,
 }
 
 #[derive(Deserialize)]
 struct CommitContent {
     #[serde(default)]
-    author: Option<CommitAuthor>,
+    author: Option<CommitAuthorName>,
     message: String,
 }
 
 #[derive(Deserialize)]
-struct CommitAuthor {
+struct CommitAuthorName {
     name: String,
+}
+
+#[derive(Deserialize)]
+struct CommitAuthor {
+    login: String,
 }
 
 fn check_commits(repo: &RepoConfig, storage: &mut Storage, token: Option<&str>) -> Option<String> {
@@ -154,11 +161,19 @@ fn check_commits(repo: &RepoConfig, storage: &mut Storage, token: Option<&str>) 
 
         storage.set(&key, &latest);
 
-        if commits.is_empty() {
+        let filtered: Vec<&CommitDetail> = commits
+            .iter()
+            .filter(|c| {
+                let login = c.author.as_ref().map(|a| a.login.as_str());
+                !repo.ignore_authors.iter().any(|ignored| Some(ignored.as_str()) == login)
+            })
+            .collect();
+
+        if filtered.is_empty() {
             continue;
         }
 
-        let lines: Vec<String> = commits
+        let lines: Vec<String> = filtered
             .iter()
             .map(|c| {
                 let sha_short = &c.sha[..7.min(c.sha.len())];

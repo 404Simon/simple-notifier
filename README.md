@@ -3,6 +3,7 @@
 Monitors sources for updates and sends email notifications.
 
 **Notifiers:**
+
 - **ScriptHookV** - checks [dev-c.com](http://www.dev-c.com/gtav/scripthookv/) for new versions
 - **GitHub** - monitors repos for commits, PRs, and releases
 - **Weather** - checks Open-Meteo 3-day forecast for temperature thresholds and extreme weather (storms, heavy rain/snow, strong wind)
@@ -33,12 +34,13 @@ email:
   to: you@example.com
 
 repos:
-  - owner: simon
-    repo: my-project
+  - owner: 404Simon
+    repo: simple-notifier
     watch:
       commits: true
       prs: true
       releases: false
+      ignore_authors: [404Simon]     # optional: filter out commits by these GitHub usernames
     branches: default
 
 weather:
