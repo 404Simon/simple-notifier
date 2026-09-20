@@ -1,13 +1,20 @@
-use regex::Regex;
-use ureq;
-
+use crate::http::HttpClient;
 use crate::notifier::{Notification, Notifier};
 use crate::storage::Storage;
+use regex::Regex;
 
 const URL: &str = "http://www.dev-c.com/gtav/scripthookv/";
 const STORAGE_KEY: &str = "scripthookv_version";
 
-pub struct ScriptHookV;
+pub struct ScriptHookV {
+    http: HttpClient,
+}
+
+impl ScriptHookV {
+    pub fn new(http: HttpClient) -> Self {
+        Self { http }
+    }
+}
 
 impl Notifier for ScriptHookV {
     fn name(&self) -> &str {
@@ -15,7 +22,7 @@ impl Notifier for ScriptHookV {
     }
 
     fn check(&self, storage: &mut Storage) -> Option<Notification> {
-        let body = match fetch_page() {
+        let body = match fetch_page(&self.http) {
             Ok(b) => b,
             Err(e) => {
                 eprintln!("[scripthookv] fetch error: {e}");
@@ -58,15 +65,8 @@ impl Notifier for ScriptHookV {
     }
 }
 
-fn fetch_page() -> Result<String, String> {
-    let resp = ureq::get(URL)
-        .header("User-Agent", "simple-notifier/0.1")
-        .call()
-        .map_err(|e| format!("HTTP request failed: {e}"))?;
-
-    resp.into_body()
-        .read_to_string()
-        .map_err(|e| format!("failed to read response body: {e}"))
+fn fetch_page(http: &HttpClient) -> Result<String, String> {
+    http.get(URL, None)
 }
 
 fn extract_version(html: &str) -> Option<String> {

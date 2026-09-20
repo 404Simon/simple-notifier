@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 use crate::config::WeatherConfig;
+use crate::http::HttpClient;
 use crate::notifier::{Notification, Notifier};
 use crate::storage::Storage;
 
@@ -8,11 +9,12 @@ const STORAGE_KEY: &str = "weather_alerted_dates";
 
 pub struct Weather {
     config: WeatherConfig,
+    http: HttpClient,
 }
 
 impl Weather {
-    pub fn new(config: WeatherConfig) -> Self {
-        Self { config }
+    pub fn new(config: WeatherConfig, http: HttpClient) -> Self {
+        Self { config, http }
     }
 }
 
@@ -36,7 +38,7 @@ impl Notifier for Weather {
     }
 
     fn check(&self, storage: &mut Storage) -> Option<Notification> {
-        let forecast = match fetch_forecast(&self.config) {
+        let forecast = match fetch_forecast(&self.config, &self.http) {
             Ok(f) => f,
             Err(e) => {
                 eprintln!("[weather] fetch error: {e}");
@@ -121,21 +123,13 @@ impl Notifier for Weather {
     }
 }
 
-fn fetch_forecast(config: &WeatherConfig) -> Result<ForecastResponse, String> {
+fn fetch_forecast(config: &WeatherConfig, http: &HttpClient) -> Result<ForecastResponse, String> {
     let url = format!(
         "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&daily=temperature_2m_max,temperature_2m_min,weathercode,wind_speed_10m_max&timezone=auto&forecast_days=3",
         config.latitude, config.longitude
     );
 
-    let resp = ureq::get(&url)
-        .header("User-Agent", "simple-notifier/0.1")
-        .call()
-        .map_err(|e| format!("HTTP error: {e}"))?;
-
-    let body = resp
-        .into_body()
-        .read_to_string()
-        .map_err(|e| format!("read error: {e}"))?;
+    let body = http.get(&url, None)?;
 
     serde_json::from_str(&body).map_err(|e| format!("JSON parse error: {e}"))
 }

@@ -1,11 +1,13 @@
 mod config;
 mod email;
+mod http;
 mod notifier;
 mod notifiers;
 mod runner;
 mod storage;
 
 use config::Config;
+use http::HttpClient;
 use notifiers::github::GitHub;
 use notifiers::scripthookv::ScriptHookV;
 use notifiers::weather::Weather;
@@ -16,19 +18,22 @@ fn main() {
         std::process::exit(1);
     });
 
-    let mut notifiers: Vec<Box<dyn notifier::Notifier>> = vec![Box::new(ScriptHookV)];
+    let http = HttpClient::new();
+    let mut notifiers: Vec<Box<dyn notifier::Notifier>> =
+        vec![Box::new(ScriptHookV::new(http.clone()))];
 
     if !config.repos.is_empty() {
         notifiers.push(Box::new(GitHub::new(
             config.repos.clone(),
             config.github_token.clone(),
+            http.clone(),
         )));
     }
 
     if let Some(ref weather_config) = config.weather
         && weather_config.has_checks()
     {
-        notifiers.push(Box::new(Weather::new(weather_config.clone())));
+        notifiers.push(Box::new(Weather::new(weather_config.clone(), http)));
     }
 
     runner::run(config, notifiers);
