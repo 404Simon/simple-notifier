@@ -52,20 +52,34 @@ pub fn run(config: Config, notifiers: Vec<Box<dyn Notifier>>) {
 
         for notifier in &notifiers {
             let name = notifier.name();
-            if let Some(notification) = notifier.check(&mut storage) {
+            let mut transaction = storage.transaction();
+            let notification = notifier.check(&mut transaction);
+            let commit = if let Some(notification) = notification {
                 println!("[{name}] notification: {}", notification.title);
 
                 if let Some(ref email) = email {
                     if let Err(e) = email.send(&notification) {
                         eprintln!("[{name}] failed to send email: {e}");
+                        false
                     } else {
                         println!("[{name}] email sent");
+                        true
                     }
+                } else {
+                    eprintln!("[{name}] notification not delivered: email is not configured");
+                    false
+                }
+            } else {
+                true
+            };
+
+            if commit {
+                storage.commit(transaction);
+                if let Err(e) = storage.save() {
+                    eprintln!("[runner] failed to save state: {e}");
                 }
             }
         }
-
-        storage.save();
 
         let delay_min = config.random_delay_min_minutes
             + rng.random_range(

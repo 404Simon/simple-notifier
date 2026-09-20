@@ -3,7 +3,7 @@ use serde::Deserialize;
 use crate::config::WeatherConfig;
 use crate::http::HttpClient;
 use crate::notifier::{Notification, Notifier};
-use crate::storage::Storage;
+use crate::storage::Transaction;
 
 const STORAGE_KEY: &str = "weather_alerted_dates";
 
@@ -37,7 +37,7 @@ impl Notifier for Weather {
         "weather"
     }
 
-    fn check(&self, storage: &mut Storage) -> Option<Notification> {
+    fn check(&self, storage: &mut Transaction) -> Option<Notification> {
         let forecast = match fetch_forecast(&self.config, &self.http) {
             Ok(f) => f,
             Err(e) => {

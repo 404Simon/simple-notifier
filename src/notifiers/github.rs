@@ -5,7 +5,7 @@ use serde::Deserialize;
 use crate::config::{BranchesConfig, RepoConfig};
 use crate::http::HttpClient;
 use crate::notifier::{Notification, Notifier};
-use crate::storage::Storage;
+use crate::storage::Transaction;
 
 pub struct GitHub {
     repos: Vec<RepoConfig>,
@@ -24,7 +24,7 @@ impl Notifier for GitHub {
         "github"
     }
 
-    fn check(&self, storage: &mut Storage) -> Option<Notification> {
+    fn check(&self, storage: &mut Transaction) -> Option<Notification> {
         let mut entries: Vec<String> = Vec::new();
 
         for repo in &self.repos {
@@ -76,7 +76,7 @@ fn api_get(
 
 fn resolve_branches(
     repo: &RepoConfig,
-    storage: &mut Storage,
+    storage: &mut Transaction,
     token: Option<&str>,
     http: &HttpClient,
 ) -> Vec<String> {
@@ -150,7 +150,7 @@ struct CommitAuthor {
 
 fn check_commits(
     repo: &RepoConfig,
-    storage: &mut Storage,
+    storage: &mut Transaction,
     token: Option<&str>,
     http: &HttpClient,
 ) -> Option<String> {
@@ -288,7 +288,7 @@ struct PRUser {
 
 fn check_prs(
     repo: &RepoConfig,
-    storage: &mut Storage,
+    storage: &mut Transaction,
     token: Option<&str>,
     http: &HttpClient,
 ) -> Option<String> {
@@ -356,7 +356,7 @@ struct ReleaseInfo {
 
 fn check_releases(
     repo: &RepoConfig,
-    storage: &mut Storage,
+    storage: &mut Transaction,
     token: Option<&str>,
     http: &HttpClient,
 ) -> Option<String> {

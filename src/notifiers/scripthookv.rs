@@ -1,6 +1,6 @@
 use crate::http::HttpClient;
 use crate::notifier::{Notification, Notifier};
-use crate::storage::Storage;
+use crate::storage::Transaction;
 use regex::Regex;
 
 const URL: &str = "http://www.dev-c.com/gtav/scripthookv/";
@@ -21,7 +21,7 @@ impl Notifier for ScriptHookV {
         "scripthookv"
     }
 
-    fn check(&self, storage: &mut Storage) -> Option<Notification> {
+    fn check(&self, storage: &mut Transaction) -> Option<Notification> {
         let body = match fetch_page(&self.http) {
             Ok(b) => b,
             Err(e) => {

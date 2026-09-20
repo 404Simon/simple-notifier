@@ -1,4 +1,4 @@
-use crate::storage::Storage;
+use crate::storage::Transaction;
 
 pub struct Notification {
     pub title: String,
@@ -7,5 +7,5 @@ pub struct Notification {
 
 pub trait Notifier: Send + Sync {
     fn name(&self) -> &str;
-    fn check(&self, storage: &mut Storage) -> Option<Notification>;
+    fn check(&self, state: &mut Transaction) -> Option<Notification>;
 }
